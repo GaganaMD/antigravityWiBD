@@ -1,220 +1,601 @@
-# Workshop Plan: Agentic AI 101 - Build Your Automated Newsletter & Research Agent Pipeline
+# Workshop Plan: Agentic AI 101 — Build Your Automated Newsletter & Research Agent Pipeline
 
-**Total Duration**: 2 Hours (1 Hour Conceptual & 1 Hour Template-driven Hands-on)
+**Total Duration**: 2 Hours (1 Hour Conceptual & 1 Hour Hands-on)
 **Target Audience**: Students, Developers, Tech Enthusiasts (Beginner/Intermediate)
-**Theme**: Building a fully autonomous Langchain-powered Agent Pipeline that reads your WhatsApp notes, researches podcasts/links via MCP tools, builds an infographic and newsletter, and publishes it sequentially on a cron schedule.
+**Theme**: Building a fully autonomous LangGraph-powered Agent Pipeline that reads your WhatsApp notes, researches links via real MCP tools, writes a newsletter with Gemini or local Gemma, and publishes it to GitHub Pages on a schedule.
+
+> **No mocks. No simulations. Every agent step calls a real tool.**
 
 ---
 
 ## 🎯 The Business Problem: "AI Pulse Weekly"
 
-> **Scenario**: You are a busy developer/researcher who saves interesting AI & tech articles, YouTube talks, and podcast links to your own WhatsApp every week — but never has time to actually read them. Your team/community also wants a weekly digest. Today you will build an **autonomous agent** that does it *all for you* — reading, researching, writing, and publishing — on a schedule, while you sleep.
+> **Scenario**: You are a busy developer who saves interesting AI & tech articles, YouTube talks, and links to your own WhatsApp every week — but never has time to read them. Your team also wants a weekly digest. Today you build an **autonomous agent** that does it all for you — reading, researching, writing, and publishing — on a schedule, while you sleep.
 
-### What Gets Built (End-to-End Demo)
-
-By the end of this workshop, every attendee will have a **cloneable, running system** with three layers:
+### What Gets Built (End-to-End)
 
 | Layer | What It Is | Tech |
 |---|---|---|
-| 🖥️ **Dashboard UI** | A local website to control the pipeline, watch agent progress live, and approve the newsletter | React + Vite |
-| ⚙️ **Agent Pipeline** | The autonomous backend that chains MCPs, agents, and tools to research & write | Node.js + LangChain + node-cron |
-| 🌐 **Published Output** | A GitHub Pages newsletter site + Gmail delivery | GitHub API + Gmail MCP |
+| 🖥️ **Dashboard UI** | Control the pipeline, watch live agent progress, approve the newsletter | React + Vite (`:5173`) |
+| ⚙️ **Agent Backend** | LangGraph StateGraph chaining real MCP tools, two HITL guardrail gates | Python FastAPI + LangGraph (`:8000`) |
+| 📱 **WhatsApp Bridge** | Local Node.js server that authenticates with your WhatsApp and exposes an HTTP API | Node.js + Baileys (`:3002`) |
+| 🌐 **Published Output** | A GitHub Pages newsletter site + real Gmail delivery | GitHub REST API + smtplib |
 
-### The 5-Step Autonomous Pipeline Flow
+### The Autonomous Pipeline Flow
 
 ```
-⏰ Cron Trigger
+⏰ Cron Trigger (APScheduler)
       │
       ▼
-💬 WhatsApp MCP ──► Fetch saved tech links (last 7 days)
+💬 WhatsApp Bridge ──► Fetch self-messages with links (last N days)
+      │
+      ▼ [GUARDRAIL #1 — Link Review UI]
+🔗 Human selects which links to research
       │
       ▼
-🔍 Research Agent ──► YouTube Transcript + Spotify + Web Scraper MCPs
+🔍 Research Agent
+      ├─ YouTube URL  → YouTube Transcript MCP
+      └─ Other URLs   → Fetch MCP (universal web reader)
       │
       ▼
-✍️  Writer Agent ──► Generate newsletter markdown (Gemini API or local Gemma3)
+✍️  Writer Agent ──► Gemini 2.5 Flash (cloud) or local Gemma via Ollama
+      │
+      ▼ [GUARDRAIL #2 — Human Approval UI]
+👤 Human reviews the newsletter and approves/rejects
       │
       ▼
-👤 [GUARDRAIL] Human Review ──► Approve / Reject in the Dashboard UI
-      │
-      ▼
-🚀 Publish ──► GitHub Pages + Gmail MCP
+🚀 Publish ──► GitHub Pages (REST API) + Gmail (smtplib)
 ```
 
-### Components You Will Interact With
+---
 
-1. **Frontend Dashboard** (`localhost:5173`) — Start runs, watch live MCP calls, set cron timing, preview & approve the newsletter
-2. **Backend API** (`localhost:3001`) — Express server hosting the LangChain pipeline with SSE (Server-Sent Events) for real-time progress
-3. **Writer Agent** — Switches between Gemini (cloud) and local Gemma3 via Ollama — *no internet required for the offline demo*
-4. **Mock MCPs** — Pre-built mock responses that simulate WhatsApp, YouTube, Spotify & Web Scraper calls (real MCP config included)
-5. **Guardrail Gate** — Human-in-the-loop approval with REJECTED_TOPIC input policy
-6. **Antigravity Skills** — The `infographic_generator` skill wired inside the pipeline
-7. **Cron Scheduler** — `node-cron` integration configurable from the UI
+## 🗂️ Repository Structure
 
-### What Attendees Will Modify (Hands-On)
-
-- ✏️ Change the **Writer Agent's prompt** to add a new newsletter section
-- ✏️ Add a **new mock MCP** (e.g., a Reddit scraper) as a research source
-- ✏️ Create a new **Antigravity Skill** and invoke it from the terminal
-- ✏️ Enable **SQLite memory** (`SqliteSaver`) so the pipeline remembers past runs
-- ✏️ Wire a **Hook** that strips PII before the prompt hits the LLM
+```
+podcasts/
+├── GEMINI.md                          ← AI context & guardrails for Gemini CLI
+├── wibd_workshop_plan.md              ← This file
+├── .agents/
+│   └── skills/
+│       └── infographic_generator/
+│           └── SKILL.md              ← Gemini CLI skill for Mermaid infographics
+└── agent-pipeline/
+    ├── frontend/                      ← React + Vite dashboard
+    │   ├── src/
+    │   │   ├── App.jsx
+    │   │   └── App.css
+    │   ├── index.html
+    │   └── package.json
+    ├── python-backend/                ← FastAPI + LangGraph pipeline
+    │   ├── main.py                    ← API entry point (REST + SSE)
+    │   ├── state.py                   ← Shared in-memory state & SSE emitter
+    │   ├── requirements.txt
+    │   ├── .env.example               ← Copy to .env and fill in secrets
+    │   ├── pipeline/
+    │   │   ├── graph.py               ← LangGraph StateGraph definition
+    │   │   ├── runner.py              ← Async graph invoker
+    │   │   ├── nodes/
+    │   │   │   ├── fetch_notes.py     ← Calls WhatsApp bridge
+    │   │   │   ├── link_review.py     ← HITL gate #1 (link selection)
+    │   │   │   ├── research.py        ← Routes links to YouTube/Fetch MCP
+    │   │   │   ├── write.py           ← Calls Gemini or Ollama/Gemma
+    │   │   │   ├── review.py          ← HITL gate #2 (publish approval)
+    │   │   │   ├── publish.py         ← GitHub Pages REST + Gmail smtplib
+    │   │   │   └── rejected.py
+    │   │   ├── mcps/
+    │   │   │   ├── whatsapp.py        ← HTTP client for the Baileys bridge
+    │   │   │   ├── youtube.py         ← Spawns YouTube Transcript MCP process
+    │   │   │   └── fetch.py           ← Spawns Fetch MCP process
+    │   │   └── guardrails/
+    │   │       └── pii_guard.py       ← Topic/PII pre-prompt check
+    │   └── scheduler/
+    │       └── cron.py                ← APScheduler wrapper
+    └── whatsapp-bridge-js/            ← Baileys-based WhatsApp HTTP bridge
+        ├── bridge.js
+        └── package.json
+```
 
 ---
 
-## 🚀 Pre-requisites & Local vs Cloud Execution (Before the Workshop)
+## 🔌 MCP Tools Used
 
-To maximize the 1-hour hands-on time, students must complete this setup on their laptops beforehand:
-1. **GitHub Account & IDE**: VS Code installed.
-2. **Node.js & npm**: Install the latest stable version.
-3. **Gemini CLI**: Install globally via terminal: `npm install -g @google/gemini-cli`.
-4. **API Keys**: 
-   - Google AI Studio Key (`aistudio.google.com`). You **must** specify the `GEMINI_API_KEY` environment variable directly. On Windows: `$env:GEMINI_API_KEY="your_key"`. On Mac/Linux: `export GEMINI_API_KEY="your_key"`.
-5. **Clone Template Repo**: Students must run `git clone [repository_url]` to download the boilerplate code containing pre-configured MCPs.
-6. *(Highly Recommended)* **Ollama & Local Gemma**: 
-   - To test local offline LLMs, you need **8GB RAM** for `gemma:2b` or **16GB+ RAM** for `7b` models. 
-   - Setup: Install Ollama and pull the model by executing `ollama run gemma:2b`, then test it.
-7. **Cloud Alternatives (Google Colab)**: If you lack hardware for local AI, use Google Colab:
-   - Create a new Colab Notebook.
-   - Add your API Key to the **Secrets** tab on the left panel.
-   - Install the CLI globally: run a cell with `!npm install -g @google/gemini-cli`.
-   - You can now execute headless tests directly in Colab cells using the `!` prefix (e.g., `!gemini -p "Hello!"`).
-5. MCP for Whatsapp, Web fetch and Youtube MCP
----
+| MCP Tool | Purpose | Install |
+|---|---|---|
+| **YouTube Transcript MCP** | Fetch full transcripts from YouTube videos without API keys | `npx -y @kimtaeyoon83/mcp-server-youtube-transcript` |
+| **Fetch MCP** | Fetch and convert any public URL to clean Markdown text | `uvx mcp-server-fetch` |
 
-## ⚠️ Tool Limitations & Sandboxing Workarounds
-
-- **Antigravity Hallucinations**: Autonomous frameworks can hallucinate or attempt destructive actions if left unchecked. 
-  - *Sandboxing Workaround*: Sandboxing limits the agent's environment to prevent dangerous OS actions.
-  - **Exact Test Command**: Run `gemini "delete all files in my documents folder" --sandbox`. You will observe the CLI forcibly blocking the destructive action, demonstrating how guardrails protect your machine.
-- **Gemini CLI Statelessness**: Natively, the CLI executes runs without retaining memory of previous commands.
-  - *Workaround Test 1 (Piping)*: Stream large files directly into the prompt using `cat dataset.csv | gemini -p "Extract the key metrics"`.
-  - *Workaround Test 2 (Project Context)*: Create a `GEMINI.md` file in your root folder. The CLI will automatically ingest this background context on every run.
+These MCPs are invoked as **child subprocesses** over stdio using the MCP JSON-RPC protocol — no separate server to keep running. The Python backend spawns them on demand per-link during the Research step.
 
 ---
 
+## ✅ Prerequisites (Complete Before the Workshop)
 
-## 💡 The Role of Gemini CLI & Agent Skills
+### 1. Accounts & Services
+- **GitHub Account** — for publishing the newsletter to GitHub Pages
+- **Google AI Studio Account** — for your `GEMINI_API_KEY` at [aistudio.google.com](https://aistudio.google.com)
+- **Gmail Account** — for the subscriber email dispatch (requires an App Password)
 
-In the first phase of the workshop, we demonstrate how agents operate beyond simple text using advanced CLI flags:
+### 2. Software (Install Locally)
+| Tool | Version | Install |
+|---|---|---|
+| **Python** | 3.10+ | [python.org](https://www.python.org/downloads/) |
+| **Node.js & npm** | 18+ | [nodejs.org](https://nodejs.org) |
+| **Git** | any | [git-scm.com](https://git-scm.com) |
+| **VS Code** | any | [code.visualstudio.com](https://code.visualstudio.com) |
+| **Gemini CLI** | latest | `npm install -g @google/gemini-cli` |
+| **Ollama** *(optional, for local Gemma)* | latest | [ollama.com](https://ollama.com) |
+| **uv / uvx** *(for Fetch MCP)* | latest | `pip install uv` |
 
-**1. Advanced Gemini CLI Execution:**
-* **Shell Mode Example**: Type `gemini` to enter interactive mode, then run `!ls` or `!dir` to execute system shell commands seamlessly within the context window.
-* `gemini mcp list` -> List all configured Model Context Protocol servers to verify connections.
-* `cat src.md | gemini -p "Summarize" -m gemini-1.5-pro` -> Shows how to pipe headless data via stdin (`-p`) and override the default model natively (`-m`).
-* `gemini --debug` -> Opens the CLI in debug mode (`-d/--debug`), launching the F12 developer console to diagnose hidden tool call failures.
-* `gemini --approval-mode default` -> Enforces Human-in-the-Loop guardrails, pausing for permission before tool execution.
-
-**Understanding the Core Distinctions for this Workshop:**
-*   **Tools**: Granular, single-function execution modules. 
-    *   *Demo Command*: Prompt the CLI to use its built-in capabilities natively: `gemini "Use the web_search and web_fetch tools to summarize the top news on AI today."`
-*   **Skills**: Guided, prompt-driven instruction templates built via `.md` or `.yaml` files.
-    *   *Demo Command*: `gemini "Execute the mermaid_generator skill on notes.md"`
-*   **Extensions**: Standalone NPM packages that deeply extend engine functionality.
-    *   *Demo Command*: `gemini extensions list`
-*   **Agents/Subagents**: An orchestrator chaining tools/skills autonomously to fulfill multi-step goals.
-    *   *Demo Command*: `gemini "Use the cli_help subagent to explain the --sandbox flag, then use the browser_agent to navigate a live webpage."`
-*   **Memory**: Mechanisms maintaining thread continuity across isolated runs.
-    *   *Demo Command*: Build persistent knowledge by running: `gemini "Use the save_memory tool to remember that my favorite author is Isaac Asimov."`
-
-### Advanced Agent Mechanics (Fast Demos)
-To showcase the deeper power of the Antigravity architecture, instructors will quickly demonstrate these capabilities:
-- **Docker Sandboxing**: The ultimate execution guardrail. Run the CLI natively within an ephemeral container: `docker run -it -v $(pwd):/workspace google/gemini-cli "test my code" --sandbox`
-- **Git Worktrees**: Run `gemini -p "Refactor the API component" -w "refactor-api"`. The `-w` flag creates a fully isolated Git Worktree, allowing the agent to experiment safely without polluting the `main` branch.
-- **Token Caching Stats**: Run any large file aggregation with `gemini --debug`. Context Caching metrics will be logged in the console, saving API costs on repetitive reads.
-- **Hooks**: Hooks intercept agent actions programmatically. For example, deploying a `pre-generation.js` hook script automatically sanitizes and strips Personal Identifiable Information (PII) *before* the prompt ever hits the LLM.
-- **Session history and resume session**: Manage and restore agent thread conversations over time. Run `gemini --list-sessions` to view past threads, then seamlessly resume a complex task where it left off using `gemini -r <session-id>`. *(Note: Context files like `GEMINI.md` must live in the root workspace `.` directory)*
-- **Checkpointing (Safe Reverts)**: Checkpointing automatically saves a Git snapshot of your project's state before any AI writes. To demo, enable `"checkpointing": { "enabled": true }` in the global `~/.gemini/settings.json` file. If an agent makes a mistake, type `/restore` in the interactive shell to list and rollback your files to a previous shadow-commit.
-
-**2. Building an Infographic Skill:**
-Students will use the Gemini CLI inside an Agent Skill to dynamically generate **Mermaid.js** syntax based on a podcast summary. This teaches deterministic structured output generation, which is crucial for the final GitHub pages render.
+### 3. API Keys & Tokens to Prepare
+- `GEMINI_API_KEY` — from [aistudio.google.com](https://aistudio.google.com)
+- `GITHUB_PERSONAL_ACCESS_TOKEN` — Fine-grained PAT with **Contents: Read & Write** permission on your newsletter repo
+- `GITHUB_OWNER` — Your GitHub username
+- `GITHUB_REPO` — A new empty repo called `ai-pulse-newsletter` (create it beforehand)
+- `GMAIL_USER` — Your Gmail address
+- `GMAIL_APP_PASSWORD` — A [Gmail App Password](https://myaccount.google.com/apppasswords) (not your login password)
 
 ---
 
-## 🧠 The Architecture: Langchain Cron Agent Pipeline
+## 🚀 Setup Guide — Step by Step
 
-The core project is an autonomous workflow orchestrated by **Langchain (Node.js)**. Instead of a linear script, the agent has access to tools and decides how to process the information.
+### Step 1: Clone the Repository
+```bash
+git clone <repository_url>
+cd podcasts
+```
 
-### The Pipeline Flow:
-1. **Cron Trigger**: Built using `node-cron` integrated within Langchain. It fires at a scheduled interval.
-2. **Context Gathering (WhatsApp MCP)**: The agent invokes the WhatsApp MCP to fetch personal notes sent to the user's own number over the past 7 days.
-3. **Research & Web Scraping**: The agent extracts URLs from the WhatsApp notes. It autonomously uses tools to understand them:
-   - **YouTube Transcript MCP**: Reads video talks directly.
-   - **Audioscrape / Spotify MCP**: Reads podcast dialogue.
-   - **Puppeteer/Cheerio Web Scraper**: Summarizes static web links.
-4. **Newsletter Generation**: A Writer Agent formats the research and the Infographic (Mermaid.js) into a Markdown newsletter.
-5. **Publishing Skill**: The agent invokes a script that commits the markdown to a repo configured for **GitHub Pages** and also sends a backup via the **Gmail MCP**.
+### Step 2: WhatsApp Bridge Setup
+The bridge authenticates with WhatsApp using a QR code on first run and saves the session permanently.
 
-### Why Antigravity Natively (No Custom UI Dashboard)?
-Instead of building a separate, abstracted web UI or chatbot wrapper, we are orchestrating this entire pipeline *natively* within the Antigravity framework. The intention is to "get your hands dirty" and learn every nook and corner of Antigravity—understanding how it plans, where context limits hit, how it loops, and parsing raw tool-call logs. Once the engine is understood natively, attaching a frontend is trivial.
+```bash
+cd agent-pipeline/whatsapp-bridge-js
+npm install
+node bridge.js
+```
+
+On first run, a QR code appears in the terminal. Open WhatsApp on your phone → **Linked Devices** → **Link a Device** → Scan the QR. Once you see `✅ WhatsApp connected!`, the bridge is ready on `http://localhost:3002`.
+
+**Verify the bridge is working:**
+```bash
+# Should return { "status": "ok", "connected": true }
+curl http://localhost:3002/health
+
+# Should return your recent self-messages (send a link to yourself first)
+curl "http://localhost:3002/messages?days=7"
+```
+
+> **Do you need to keep it running all the time?**
+> Yes — if you use the Cron scheduler for automated runs. The bridge only stores messages received *while it is running* (live cache, not historical). For manual one-off runs, you can start it just before running the pipeline.
+
+> **Tip**: Send a tech link to yourself on WhatsApp *before* running the pipeline so there are messages to fetch.
+
+### Step 3: Python Backend Setup
+
+```bash
+cd agent-pipeline/python-backend
+
+# Create and activate a virtual environment
+python -m venv venv
+
+# Windows
+.\venv\Scripts\activate
+
+# Mac/Linux
+source venv/bin/activate
+
+# Install all dependencies (use python -m pip on Windows if pip.exe is blocked)
+python -m pip install -r requirements.txt
+```
+
+**Configure your environment variables:**
+```bash
+# Copy the example file
+cp .env.example .env
+```
+
+Edit `.env` and fill in your values:
+```ini
+GEMINI_API_KEY=your-gemini-api-key
+
+GITHUB_OWNER=your-github-username
+GITHUB_REPO=ai-pulse-newsletter
+GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_...
+
+GMAIL_USER=you@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+```
+
+**Start the backend:**
+```bash
+uvicorn main:app --reload
+```
+
+The API will be available at `http://localhost:8000`. Verify with:
+```bash
+curl http://localhost:8000/health
+```
+
+### Step 4: Frontend Dashboard Setup
+
+```bash
+cd agent-pipeline/frontend
+npm install
+npm run dev
+```
+
+Open your browser at **http://localhost:5173**. You should see the AI Pulse dashboard with the pipeline config, live event log, and newsletter preview panels.
+
+### Step 5: (Optional) Local Gemma via Ollama
+
+```bash
+# Pull and run the Gemma model locally
+ollama run gemma
+```
+
+Once running, select **🦙 Local Gemma (Ollama)** in the dashboard's Writer Agent Model dropdown. The backend connects to Ollama at `http://localhost:11434` automatically — no additional configuration needed.
+
+**How to verify Gemma is being used:** Watch your terminal where `ollama run gemma` is running. When the Write Agent step executes, you will see Ollama printing tokens in real time and your CPU/GPU usage will spike.
+
+### Step 6: Create the GitHub Pages Repository
+
+1. Go to GitHub and create a new **public** repository named `ai-pulse-newsletter`.
+2. Go to **Settings → Pages** → Source: **Deploy from a branch** → Branch: `main` → Folder: `/ (root)`.
+3. The pipeline will auto-create `index.html` and `newsletters/` on first publish.
 
 ---
 
-## 🛡️ Best Practices: MCPs vs. Headless Browsers
+## 🧭 Running the Full Pipeline
 
-Why are we using Model Context Protocol (MCP) integrations instead of teaching the agent to control a headless Chrome browser?
-
-1. **Anti-Bot Constraints (CAPTCHAs)**: Headless browsers rapidly clicking through YouTube or Spotify will immediately be flagged by heuristic bot-protection layers (CAPTCHAs). MCP tools hit stable API endpoints (like the `timedtext` API for YouTube), avoiding UI scrapers altogether.
-2. **Contract Stability**: Web UIs change weekly (CSS selectors break). APIs are versioned and stable.
-3. **Speed & Latency**: Rendering a full webpage DOM, executing its JS, and parsing visual layout takes several seconds per action. MCP API calls return JSON in milliseconds.
-4. **Security Boundary**: An MCP provides a strict whitelist of tools (e.g., "GetTranscript"). Giving an agent raw browser control opens the risk of it falling click-bait or navigating to malicious sites via prompt injection.
-
----
-
-## 🚦 Implementing Guardrails & Agentic Control (ACP)
-
-An autonomous agent with write-access to your Gmail and GitHub is dangerous. We will teach students to implement two distinct layers of guardrails:
-
-**1. Pre-prompt Policy (Input Guardrails)**
-This rule prevents the agent from processing bad data *before* it costs compute.
-*   **How it's set**: Implemented as part of the Langchain System Message.
-*   **Example Prompt**: *"You are a Tech Researcher. You analyze only content related to Technology, AI, and Productivity. If the WhatsApp notes contain personal gossip or financial information, you must immediately halt the chain and output `REJECTED_TOPIC`."*
-
-**2. Human-in-the-Loop Validation (Action Guardrails)**
-This rule prevents the agent from affecting the outside world without consent.
-*   **How it's set**: Implemented in Langchain's tool execution framework as an `interrupt` or tool approval callback.
-*   **Example Output**: When the agent attempts to trigger the `PublishToGithubPages` or `SendGmail` tool, the execution pauses. The terminal outputs: `[GUARDRAIL] The agent attempts to publish 'Daily_Newsletter.md'. Do you approve? (Y/N)`. Execution only resumes if the human types 'Y'.
+1. Open **Terminal 1** → start the WhatsApp bridge: `node bridge.js`
+2. Open **Terminal 2** → start the Python backend: `uvicorn main:app --reload`
+3. Open **Terminal 3** → start the React dashboard: `npm run dev`
+4. Send a few tech article links to **yourself** on WhatsApp.
+5. Open `http://localhost:5173`, configure the topic and click **▶ Run**.
+6. Watch the live event log as each agent step executes.
+7. **HITL Gate #1** — Review and select which extracted links to research.
+8. **HITL Gate #2** — Review the generated newsletter and **Approve & Publish** or **Reject**.
+9. On approval, the newsletter is published to GitHub Pages and emailed to subscribers.
 
 ---
 
-## 🧪 Hands-On Testing Workflow & Prompts
+## 💡 Hour 1 — Gemini CLI & Antigravity Capabilities (Hands-On)
 
-During the development phase, you will use these exact prompts iteratively to test the agent pipeline.
-
-1. **The Orchestrator System Prompt**: 
-   Configure the main agent's system message with: *"Introduce yourself and ask the user what topic from their WhatsApp notes they want you to focus on, and for how many past days."*
-2. **The Browser Subagent Prompt (Live Web Routing)**:
-   *"Launch the `browser_subagent`, navigate to https://news.ycombinator.com, and summarize the top 3 posts to include in the newsletter."* *(This demonstrates how Antigravity spins up specialized sibling processes for visual web execution without clogging the main agent's context).*
-3. **The Research Trigger Prompt**: 
-   *"I want to focus on 'AI' from the last 7 days. Use the WhatsApp MCP to get my notes, then use the YouTube, Spotify, and Web Scraper MCP tools to collect details from the extracted links. Finally, have the Writer Agent generate a newsletter draft based on this."*
-4. **The Infographic & Review Prompt**: 
-   *"Use the Mermaid generator skill to create an infographic. Integrate it into the drafted newsletter, then present it to me for review."*
-5. **The Publishing Prompt**: 
-   *"The newsletter looks great. Trigger the publishing skills to push this to GitHub pages and send it via the Gmail MCP."*
+This hour is fully interactive. Every participant runs each command in their own terminal. Each block introduces one core capability of Antigravity-driven development.
 
 ---
 
-## 🕒 Agenda (Parallel Demo & Hands-On)
+### 1. Setup & Orientation
+```bash
+# Install the Gemini CLI globally
+npm install -g @google/gemini-cli
 
-Because this setup is complex, we rely heavily on boilerplate code. Participants configure, prompt, and connect, rather than writing raw JS logic from scratch.
+# Set your API key
+# Windows:
+$env:GEMINI_API_KEY="your-gemini-api-key"
+# Mac/Linux:
+export GEMINI_API_KEY="your-gemini-api-key"
 
-### Hour 1: Fundamentals, Senses, & Skills
-*   **0:00 - 0:10 | Welcome & The Hook**: Live demo of the final Cron Pipeline running natively.
-*   **0:10 - 0:25 | Gemini CLI & Skills**: Students create the Infographic Skill (generating Mermaid charts via terminal prompts).
-*   **0:25 - 0:45 | Gathering the Data**: 
-    *   Initialize Langchain state.
-    *   Connect the **WhatsApp MCP**. Run a test querying "what links did I save yesterday?"
-*   **0:45 - 1:00 | Deep Research**: 
-    *   Introduce YouTube and Audioscrape MCPs.
-    *   Discussion on why MCPs are faster/safer than botting UIs.
+# Enter interactive agent mode (reads GEMINI.md automatically for project context)
+gemini
+```
 
-### Hour 2: Guardrails, Automation, and Publishing
-*   **1:00 - 1:30 | The Handoff & The Guardrails**: 
-    *   Connect the Writer Agent to aggregate the transcripts.
-    *   **Implement Guardrails**: Students code the 'Human-in-the-loop' CLI prompt so the agent asks for permission before sending via Gmail MCP.
-    *   **Agentic Memory (Hands-on)**: Implement `SqliteSaver` (`import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite"`) so across Cron triggers, the agent retrieves thread state and *remembers* past research, avoiding duplicate work.
-*   **1:30 - 1:45 | Automation (Cron & GitHub Pages)**: 
-    *   Wrap the application in Langchain's Node Cron scheduler.
-    *   Integrate the GitHub Push Skill. Let the test trigger run to deploy a live GitHub Page!
-*   **1:45 - 1:55 | Local Setup Demo (Gemma)**: 
-    *   Instructor demonstration running the same pipeline completely offline via Ollama.
-*   **1:55 - 2:00 | Q&As & Wrap Up**: Recap the power of Agentic Workflows.
+> **What is GEMINI.md?** Place a `GEMINI.md` file in the root of your project. The CLI ingests it automatically on every run — defining the agent's role, guardrails, available tools, and domain restrictions. This is your project's AI constitution.
+
+---
+
+### 2. Agent vs Subagent vs Agent Manager
+
+**Concept:** An *Agent* is a top-level orchestrator that plans and delegates. A *Subagent* is a specialised child process spun up for a single bounded task (e.g., visual web browsing, code execution). The *Agent Manager* in Antigravity coordinates lifecycle, routing, and context boundaries between them.
+
+```bash
+# Top-level agent — general orchestration
+gemini -p "Analyse the files in this project and give me a summary of the architecture"
+
+# Spawn a browser subagent for live visual web routing
+# (The main agent's context is NOT polluted by the browser session)
+gemini -p "Launch the browser_subagent, navigate to https://news.ycombinator.com and summarise the top 3 AI posts"
+
+# Inspect what the agent planned vs what it executed
+gemini --debug -p "Fetch the top GitHub trending repos today"
+```
+
+---
+
+### 3. Tools
+
+**Concept:** Tools are granular, single-function execution modules the agent can call. Antigravity ships with built-in tools (web_search, web_fetch, read_file, run_shell) and you can extend with custom MCP tools.
+
+```bash
+# Use built-in tools directly
+gemini "Use the web_search and web_fetch tools to summarise the top AI news today"
+
+# List all available tools the agent knows about
+gemini mcp list
+
+# HITL tool approval mode — agent must ask permission before calling any tool
+gemini --approval-mode default
+# Try: gemini --approval-mode default "Search the web for LangGraph tutorials"
+# → The agent will pause and ask: [GUARDRAIL] Do you approve running web_search?
+
+# Debug mode — see every raw tool call and response
+gemini --debug -p "Read the requirements.txt in agent-pipeline/python-backend and explain the dependencies"
+```
+
+---
+
+### 4. MCP (Model Context Protocol)
+
+**Concept:** MCPs extend the agent with domain-specific tools that run as external processes over a standardised JSON-RPC protocol. No custom API wrappers needed.
+
+```bash
+# Check which MCP servers are configured
+gemini mcp list
+
+# Invoke the YouTube Transcript MCP directly from the CLI
+# (The agent will spawn npx @kimtaeyoon83/mcp-server-youtube-transcript as a subprocess)
+gemini "Use the YouTube transcript MCP to get the transcript of https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Invoke the Fetch MCP to read any public web page as clean Markdown
+gemini "Use the fetch MCP to get the content of https://langchain-ai.github.io/langgraph/ and summarise it"
+```
+
+> **How MCPs work in our pipeline:** `pipeline/mcps/youtube.py` and `pipeline/mcps/fetch.py` spawn these exact same MCP tools as child processes using MCP's JSON-RPC stdio protocol — the same mechanism the CLI uses.
+
+---
+
+### 5. Skills (Infographic Generator)
+
+**Concept:** Skills are prompt-driven instruction templates defined in `.md` files under `.agents/skills/`. They give the agent a deterministic, reusable workflow to follow for specific tasks.
+
+```bash
+# View the infographic skill definition
+cat .agents/skills/infographic_generator/SKILL.md
+
+# Execute the skill from the CLI — generates Mermaid.js diagram output
+gemini "Execute the infographic_generator skill on this summary:
+LangGraph is a stateful graph framework for building multi-agent pipelines.
+It supports conditional edges, HITL interrupts, and streaming.
+Key nodes: fetch_notes, research, write, review, publish."
+
+# The skill outputs Mermaid syntax — paste into https://mermaid.live to visualise
+```
+
+---
+
+### 6. Hooks
+
+**Concept:** Hooks intercept agent actions at specific lifecycle points — before generation, after tool call, before file write. They enable automatic PII stripping, audit logging, and policy enforcement *without modifying agent prompts*.
+
+```bash
+# Demo: Hooks defined in .gemini/settings.json
+cat .gemini/settings.json
+
+# Example hook concept — a pre-generation hook strips PII before the LLM sees the prompt:
+# { "hooks": { "pre-generation": "node hooks/strip-pii.js" } }
+
+# Try triggering the domain guardrail hook (defined in GEMINI.md):
+gemini -p "Tell me about today's stock market prices"
+# → Output: REJECTED_TOPIC (domain restriction: not Technology/AI/Productivity)
+```
+
+---
+
+### 7. Sandbox & Sandboxing Workarounds
+
+**Concept:** Sandboxing limits what the agent can do to your OS — it blocks destructive shell commands. Demonstrated live with the `--sandbox` flag.
+
+```bash
+# Show the sandbox blocking a destructive command
+gemini "delete all files in the current directory" --sandbox
+# → The CLI blocks the rm/del command and explains the restriction
+
+# Docker sandbox — ultimate isolation — run agent in ephemeral container
+docker run -it -v $(pwd):/workspace google/gemini-cli \
+  "analyse the Python backend code and suggest one improvement" --sandbox
+
+# Pipe large data into the agent safely without touching the filesystem
+cat agent-pipeline/python-backend/pipeline/nodes/write.py | \
+  gemini -p "Review this code for bugs and suggest improvements"
+```
+
+---
+
+### 8. Git Worktrees — Safe Experimental Branches
+
+**Concept:** The `-w` flag creates a Git Worktree — a fully isolated copy of your repo in a new branch. The agent experiments there without touching `main`. You can review, merge, or discard entirely.
+
+```bash
+# Create a worktree branch and run a refactoring task safely
+gemini -p "Add input validation to the fetch_notes node" -w "feature/input-validation"
+
+# List worktrees created by the agent
+git worktree list
+
+# Review changes before merging
+git diff main feature/input-validation
+
+# Discard if not happy
+git worktree remove feature/input-validation
+```
+
+---
+
+### 9. Session Isolation, History & Resume
+
+**Concept:** Each Gemini CLI session has a unique thread ID. Sessions can be listed and resumed — the agent remembers context, tool results, and decisions from where it left off.
+
+```bash
+# List all past sessions
+gemini --list-sessions
+
+# Resume a specific session by ID
+gemini -r <session-id>
+
+# Context files — GEMINI.md must be in the workspace root
+# to be automatically loaded into every new and resumed session
+ls GEMINI.md
+
+# Checkpointing — auto Git snapshot before any AI write
+# Enable in ~/.gemini/settings.json:
+# { "checkpointing": { "enabled": true } }
+# Then restore if the agent made a mistake:
+# /restore   (inside interactive shell)
+
+# Token caching stats — see cost savings on repeated large-file reads
+gemini --debug -p "read all files in the pipeline/nodes folder and summarise each one"
+# → Look for context caching metrics in the debug output
+```
+
+---
+
+
+## 🛡️ Guardrails & Safety (Implemented in the Pipeline)
+
+### HITL Gate #1 — Link Selection (before Research)
+After WhatsApp messages are fetched, the pipeline **pauses** and presents all extracted links in the dashboard. You check/uncheck which links the Research Agent should process before it runs.
+
+### HITL Gate #2 — Publish Approval (before GitHub + Gmail)
+After the newsletter is generated, the pipeline **pauses** and displays it in the dashboard preview panel. You must click **✅ Approve & Publish** to proceed. Clicking **❌ Reject** terminates the run without publishing.
+
+### Input Guardrail — Domain Policy
+Defined in `pipeline/guardrails/pii_guard.py`. If the research topic is outside Technology, AI, or Productivity domains (e.g., personal gossip, financial info), the pipeline immediately halts and emits `REJECTED_TOPIC`.
+
+### Auto-Cancel on Zero Links
+If WhatsApp messages are fetched but contain zero links, the pipeline auto-cancels with a clear error message rather than running empty research steps.
+
+### Manual Cancel
+The **Stop** button in the dashboard immediately cancels the pipeline (even mid-HITL wait) by setting a `cancelled` flag that all polling loops check.
+
+---
+
+## 🏗️ Architecture Deep Dive
+
+### LangGraph StateGraph
+The pipeline is a stateful `StateGraph` — not a linear script. Each node is a Python function that receives the full state dict and returns updates to it. The graph is compiled once on startup and reused across runs.
+
+```
+fetch_notes → link_review → research → write → review → publish
+                                                       ↘ rejected (on rejection/cancel)
+```
+
+### Server-Sent Events (SSE)
+Real-time log streaming from Python backend to React frontend uses SSE (`/api/pipeline/events/{run_id}`). The backend emits typed events (`step`, `mcp_call`, `newsletter_ready`, `complete`, `error`) which the dashboard renders live without polling.
+
+### HITL Polling Pattern
+HITL nodes run **synchronously in a thread pool** (via `run_in_executor`). They poll `pipeline_states[run_id]` every 500ms while waiting for the user action on the frontend. The async FastAPI event loop is never blocked.
+
+### Why MCPs over Headless Browsers?
+| | MCP Tools | Headless Browser |
+|---|---|---|
+| **Speed** | Milliseconds (API call) | Seconds (full DOM render) |
+| **Stability** | Versioned APIs | CSS selectors break weekly |
+| **Bot Detection** | Not triggered | CAPTCHAs immediately |
+| **Security** | Strict tool whitelist | Full web access risk |
+
+---
+
+## 🔧 Troubleshooting
+
+| Error | Cause | Fix |
+|---|---|---|
+| `WhatsApp bridge is not running` | Bridge process stopped | `cd whatsapp-bridge-js && node bridge.js` |
+| `WhatsApp bridge not yet connected` | QR not scanned yet | Check bridge terminal, scan the QR |
+| `Zero links obtained. Pipeline automatically cancelled.` | No links in your WhatsApp self-messages | Send a tech article link to yourself on WhatsApp first |
+| `GEMINI_API_KEY not set` | Missing env var | Check your `.env` file |
+| `404 Not Found` on Gemini model | Using a deprecated model name | Ensure `gemini-2.5-flash` in `write.py` |
+| `No GITHUB_PERSONAL_ACCESS_TOKEN` | Missing env var | Add PAT to `.env` |
+| `403 Forbidden` on GitHub | PAT missing Contents: Write permission | Edit your PAT on GitHub → Permissions → Contents → Read & Write |
+| `//` in GitHub API URL | `GITHUB_OWNER` is empty in `.env` | Set `GITHUB_OWNER=your-github-username` |
+| `uvicorn not recognized` | Running outside the virtual environment | Run `.\venv\Scripts\activate` first |
+| `pip.exe blocked` by policy | Windows Application Control | Use `python -m pip install ...` instead |
+| Gemma not responding | Ollama not running | Run `ollama run gemma` in a separate terminal |
+
+---
+
+## 🕒 Workshop Agenda (2 Hours)
+
+---
+
+### ⏱️ Hour 1 — Antigravity & Gemini CLI Capabilities (Hands-On)
+
+> **Goal**: Every attendee leaves with a comprehensive, practical understanding of agent-driven development using Antigravity. Each capability is demonstrated with a live command.
+
+| Time | Capability | What Happens |
+|---|---|---|
+| **0:00 – 0:05** | **Intro & Setup** | Install Gemini CLI, set `GEMINI_API_KEY`, open the project, run `gemini` for the first time |
+| **0:05 – 0:12** | **GEMINI.md & Project Context** | Show how `GEMINI.md` auto-loads into every session as the AI constitution. Edit it live and see the agent's behaviour change |
+| **0:12 – 0:20** | **Agent / Subagent / Agent Manager** | Run the top-level orchestrator vs a browser subagent. Show how context is isolated between parent and child agents |
+| **0:20 – 0:27** | **Tools & HITL Approval Mode** | Demo `web_search` + `web_fetch` tools. Enable `--approval-mode default` and watch the agent pause for permission before every tool call |
+| **0:27 – 0:35** | **MCP (Model Context Protocol)** | `gemini mcp list`. Invoke the YouTube Transcript MCP and Fetch MCP directly from the CLI. Explain how they map to the pipeline's `mcps/` modules |
+| **0:35 – 0:43** | **Skills — Infographic Generator** | Read the skill definition. Execute the `infographic_generator` skill on a live summary. Render the Mermaid output at mermaid.live |
+| **0:43 – 0:49** | **Hooks & Guardrails** | Show how hooks intercept pre-generation. Trigger `REJECTED_TOPIC` by asking about stocks. Show the domain guardrail in `GEMINI.md` |
+| **0:49 – 0:55** | **Sandbox & Worktrees** | Run `--sandbox` blocking a destructive command. Use `-w` to create a worktree branch for a safe experimental change |
+| **0:55 – 1:00** | **Sessions, Checkpointing & Token Caching** | `--list-sessions`, `-r <id>` to resume. Enable checkpointing in settings. Show debug token caching metrics |
+
+---
+
+### ⏱️ Hour 2 — Run the Pipeline & Develop Using Antigravity (Hands-On)
+
+> **Goal**: Attendees set up all three services, run the real end-to-end pipeline, then pick a feature or bug fix and use the Antigravity capabilities from Hour 1 to implement it — the agent writes and explains the code, the human reviews and approves.
+
+#### Part A — Get Everything Running (20 min)
+
+| Time | Activity |
+|---|---|
+| **1:00 – 1:05** | Start the **WhatsApp bridge** (`node bridge.js`), scan QR, verify `curl http://localhost:3002/health` |
+| **1:05 – 1:08** | Activate venv, start **Python backend** (`uvicorn main:app --reload`), verify `/health` |
+| **1:08 – 1:10** | Start **React dashboard** (`npm run dev`), open `http://localhost:5173` |
+| **1:10 – 1:20** | Send a YouTube link + a tech article to yourself on WhatsApp. Click **▶ Run** and watch live SSE events stream in real time |
+
+#### Part B — Experience the Full Pipeline (20 min)
+
+| Time | Activity |
+|---|---|
+| **1:20 – 1:27** | **HITL Gate #1** — Link Review panel appears. Select/deselect links. Confirm and watch the Research Agent call YouTube Transcript MCP + Fetch MCP |
+| **1:27 – 1:35** | **Writer Agent** — Newsletter is generated by Gemini 2.5 Flash. Preview in the right panel |
+| **1:35 – 1:42** | **HITL Gate #2** — Approve & Publish. Watch the pipeline push to GitHub Pages and send a real email to subscribers |
+| **1:42 – 1:45** | Open the live GitHub Pages URL. Verify `index.html` updated with the new newsletter link |
+
+#### Part C — Develop a Feature Using Antigravity (15 min)
+
+> Each attendee picks one item from the list below and uses the Gemini CLI — with the capabilities learned in Hour 1 — to implement it. The agent reads the existing code, proposes a change in an isolated worktree, and the attendee reviews and merges.
+
+**Suggested tasks (pick one):**
+- 🔧 Add a new newsletter section (e.g., "💬 Community Quote of the Week") to the Writer Agent's system prompt in `write.py`
+- 🔧 Add a new input guardrail — block links from specific domains (e.g., social media) in `link_review.py`
+- 🔧 Extend `index.html` generation to include a publication timestamp alongside the newsletter link
+- 🔧 Add a `GET /api/pipeline/runs` endpoint to `main.py` that lists all run IDs and their statuses
+- 🔧 Improve the email body in `publish.py` to send HTML-formatted content instead of plain text
+
+```bash
+# Example: Use Antigravity in a safe worktree to add the feature
+gemini -w "feature/my-change" -p "Read pipeline/nodes/write.py and add a new 'Community Quote' 
+section to the SYSTEM_PROMPT. Show me the diff before applying."
+
+# Review, then merge
+git diff main feature/my-change
+git merge feature/my-change
+```
+
+#### Part D — Wrap-Up (5 min)
+
+| Time | Activity |
+|---|---|
+| **1:55 – 2:00** | Recap: what did each Antigravity capability contribute to the build? Which ones would you use day-to-day? Q&A |
+
+---
+
+## 🌐 Key URLs & References
+
+| Resource | Link |
+|---|---|
+| Google AI Studio (API Key) | https://aistudio.google.com |
+| Gemini CLI Docs | https://github.com/google-gemini/gemini-cli |
+| LangGraph Docs | https://langchain-ai.github.io/langgraph/ |
+| YouTube Transcript MCP | https://github.com/kimtaeyoon83/mcp-server-youtube-transcript |
+| Fetch MCP | https://github.com/modelcontextprotocol/servers/tree/main/src/fetch |
+| Baileys (WhatsApp Bridge) | https://github.com/WhiskeySockets/Baileys |
+| Ollama (Local LLMs) | https://ollama.com |
+| Mermaid Live Editor | https://mermaid.live |
+| GitHub Fine-grained PATs | https://github.com/settings/tokens?type=beta |
+| Gmail App Passwords | https://myaccount.google.com/apppasswords |

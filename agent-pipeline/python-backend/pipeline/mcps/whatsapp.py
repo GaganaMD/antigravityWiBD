@@ -39,7 +39,7 @@ def fetch_whatsapp_self_messages(days: int = 7) -> list[dict]:
         raise RuntimeError(
             "WhatsApp bridge is not running.\n"
             "Start it with:\n"
-            "  cd c:\\Users\\Sivasakthi.M\\podcasts\\agent-pipeline\\whatsapp-bridge-js\n"
+            "  cd <your-repo-path>/agent-pipeline/whatsapp-bridge-js\n"
             "  node bridge.js\n"
             "Then scan the QR code with your WhatsApp mobile app."
         )
