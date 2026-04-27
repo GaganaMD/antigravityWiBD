@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "whatsapp": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${env:WHATSAPP_MCP_PATH}/whatsapp-mcp-server",
+        "run",
+        "main.py"
+      ],
+      "description": "lharries/whatsapp-mcp — QR code auth once via mobile app. Go bridge must be running."
+    },
+    "youtube-transcript": {
+      "command": "npx",
+      "args": ["-y", "@kimtaeyoon83/mcp-server-youtube-transcript"],
+      "description": "Fetches transcripts from public YouTube videos — NO auth needed"
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "description": "Fetches any public URL and returns Markdown — NO auth needed"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "description": "Official GitHub remote MCP — OAuth via VS Code 1.101+. No PAT needed inside Antigravity."
+    }
+  }
+}
