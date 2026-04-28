@@ -11,6 +11,8 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    depends_on:
+      - whatsapp
     restart: unless-stopped
 
   frontend:
@@ -22,4 +24,13 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+    restart: unless-stopped
+
+  whatsapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.whatsapp
+    container_name: whatsapp_bridge
+    stdin_open: true
+    tty: true
     restart: unless-stopped
