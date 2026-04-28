@@ -2,10 +2,10 @@ FROM node:20
 
 WORKDIR /app
 
-COPY whatsapp-bridge-js/package*.json ./
+COPY agent-pipeline/whatsapp-bridge-js/package*.json ./
 
 RUN npm install
 
-COPY whatsapp-bridge-js .
+COPY agent-pipeline/whatsapp-bridge-js .
 
 CMD ["npm", "start"]
